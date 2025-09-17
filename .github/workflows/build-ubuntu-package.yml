@@ -1,0 +1,61 @@
+name: Build Ubuntu 20.04 Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '16'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxtst-dev libxss-dev libgtk-3-dev
+
+    - name: Install Yarn
+      run: npm install -g yarn
+
+    - name: Install project dependencies
+      run: yarn install
+
+    - name: Copy environment file
+      run: cp .env.example .env
+
+    - name: Build Electron app for Linux
+      run: yarn electron:build --linux deb:x64
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ubuntu-20.04-package
+        path: dist_electron/*.deb
+        retention-days: 30
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist_electron/*.deb
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

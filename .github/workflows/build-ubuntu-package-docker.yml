@@ -1,0 +1,52 @@
+name: Build Ubuntu 20.04 Package (Docker)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -f Dockerfile.ubuntu20 -t yesplaymusic-builder .
+
+    - name: Build package
+      run: |
+        docker run --rm -v $(pwd):/output yesplaymusic-builder sh -c "
+          cp -r /app/dist_electron/* /output/
+          chown -R $(id -u):$(id -g) /output/dist_electron
+        "
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ubuntu-20.04-package-docker
+        path: dist_electron/*.deb
+        retention-days: 30
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist_electron/*.deb
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
